@@ -1,28 +1,29 @@
+#include <Arduino.h>
+#include "pitches.h"
 
-// Updated Arduino Code for MKRZero with 4 Ultrasonic Sensors
-// Sensor 1 --> Right
-// Sensor 2 --> Top
-// Sensor 3 --> Left
-// Sensor 4 --> Bottom
+// Notes to play based on sensors
+int notes[] = {NOTE_C3, NOTE_E3, NOTE_G3, NOTE_B3};
 
-#define SENSOR1_TRIG 11
-#define SENSOR1_EC 12
-#define SENSOR2_TRIG 14
-#define SENSOR2_EC 13
-#define SENSOR3_TRIG 9
-#define SENSOR3_EC 10
-#define SENSOR4_TRIG 7
-#define SENSOR4_EC 8
+// Ultrasonic sensor pins
+#define SENSOR1_TRIG 13
+#define SENSOR1_EC 14
+#define SENSOR2_TRIG 1
+#define SENSOR2_EC 0
+#define SENSOR3_TRIG 8
+#define SENSOR3_EC 9
+#define SENSOR4_TRIG 6
+#define SENSOR4_EC 7
 
-#define motor A1
+// Speaker connected to PAM8302A
+#define SPEAKER_PIN A0 // PWM-capable pin connected to PAM8302A
 
-int lower_boundary = 0;
-int upper_boundary = 100;
+// Volume control (percentage: 0 to 100)
+int volume = 50;
 
 void setup() {
   Serial.begin(9600);
 
-  // Set pin modes for ultrasonic sensors
+  // Initialize ultrasonic sensor pins
   pinMode(SENSOR1_TRIG, OUTPUT);
   pinMode(SENSOR1_EC, INPUT);
   pinMode(SENSOR2_TRIG, OUTPUT);
@@ -32,39 +33,42 @@ void setup() {
   pinMode(SENSOR4_TRIG, OUTPUT);
   pinMode(SENSOR4_EC, INPUT);
 
-  // No need to set pin mode for the motor (analog read pin)
+  // Initialize speaker pin
+  pinMode(SPEAKER_PIN, OUTPUT);
 }
 
 void loop() {
-  // Read motor value
-  int motorVal = analogRead(motor);
-  Serial.print("Motor Value: ");
-  Serial.println(motorVal);
+  // Get distances from all sensors
+  int distances[] = {
+    getDistance(SENSOR1_TRIG, SENSOR1_EC),
+    getDistance(SENSOR2_TRIG, SENSOR2_EC),
+    getDistance(SENSOR3_TRIG, SENSOR3_EC),
+    getDistance(SENSOR4_TRIG, SENSOR4_EC)
+  };
 
-  // Function to trigger the sensor and get the distance
-  int distance1 = getDistance(SENSOR1_TRIG, SENSOR1_EC);
-  int distance2 = getDistance(SENSOR2_TRIG, SENSOR2_EC);
-  int distance3 = getDistance(SENSOR3_TRIG, SENSOR3_EC);
-  int distance4 = getDistance(SENSOR4_TRIG, SENSOR4_EC);
+  // Log distances for debugging
+  Serial.print("Distances: ");
+  for (int i = 0; i < 4; i++) {
+    Serial.print(distances[i]);
+    Serial.print(" ");
+  }
+  Serial.println();
 
-  // Print distances
-  Serial.print("Distance 1 (Right): ");
-  Serial.println(distance1);
+  // Determine the closest sensor
+  int closestIndex = getClosestSensor(distances);
 
-  Serial.print("Distance 2 (Top): ");
-  Serial.println(distance2);
+  // Play the corresponding note if a valid sensor is selected
+  if (closestIndex != -1) {
+    playBeepingTone(notes[closestIndex], 500, volume); // Play the note with beeping effect
+  } else {
+    analogWrite(SPEAKER_PIN, 0); // Ensure no sound if no valid sensor
+  }
 
-  Serial.print("Distance 3 (Left): ");
-  Serial.println(distance3);
-
-  Serial.print("Distance 4 (Bottom): ");
-  Serial.println(distance4);
-
-  delay(200);
+  delay(200); // Short delay before the next cycle
 }
 
 int getDistance(int trigPin, int echoPin) {
-  // Triggering the sensor
+  // Trigger the sensor
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
   digitalWrite(trigPin, HIGH);
@@ -74,7 +78,53 @@ int getDistance(int trigPin, int echoPin) {
   // Read the echo pulse
   long duration = pulseIn(echoPin, HIGH, 30000); // Timeout of 30 ms
 
-  // Calculate distance in cm (speed of sound is ~0.0343 cm/us)
+  // Calculate distance in cm (speed of sound ~0.0343 cm/us)
   int distance = (duration * 0.0343) / 2;
-  return distance;
+  return distance > 0 ? distance : 9999; // Return a large number if no reading
+}
+
+int getClosestSensor(int distances[]) {
+  int minDistance = 9999; // Start with a high value
+  int closestIndex = -1;
+  int tieIndices[4]; // To handle ties
+  int tieCount = 0;
+
+  // Find the minimum distance
+  for (int i = 0; i < 4; i++) {
+    if (distances[i] < minDistance) {
+      minDistance = distances[i];
+      closestIndex = i;
+      tieCount = 0; // Reset tie count
+      tieIndices[tieCount++] = i; // Add this index as the first tie
+    } else if (distances[i] == minDistance) {
+      tieIndices[tieCount++] = i; // Add to tie list
+    }
+  }
+
+  // If there are ties, pick a random one
+  if (tieCount > 1) {
+    closestIndex = tieIndices[random(0, tieCount)];
+  }
+
+  return closestIndex; // Return the closest sensor index
+}
+
+// Function to generate a beeping tone with adjustable volume
+void playBeepingTone(int frequency, int duration, int amplitudePercentage) {
+  const int maxAmplitude = 255; // Max PWM value (8-bit resolution)
+  int amplitude = map(amplitudePercentage, 0, 100, 0, maxAmplitude); // Map percentage to 0-255
+  long period = 1000000L / frequency; // Period of the wave in microseconds
+  long halfPeriod = period / 2;
+
+  unsigned long startMillis = millis();
+  while (millis() - startMillis < duration) {
+    analogWrite(SPEAKER_PIN, amplitude); // High with adjusted amplitude
+    delayMicroseconds(halfPeriod);
+
+    analogWrite(SPEAKER_PIN, 0);        // Low
+    delayMicroseconds(halfPeriod);
+  }
+
+  // Small pause to create the beeping effect
+  delay(50); // Pause between beeps
 }
