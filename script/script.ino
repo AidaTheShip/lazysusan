@@ -22,10 +22,10 @@ int notes[] = {NOTE_C3, NOTE_E3, NOTE_G3, NOTE_B3};
 #define SENSOR4_EC 7
 
 // Speaker connected to PAM8302A
-#define SPEAKER_PIN A0 // PWM-capable pin connected to PAM8302A
+#define SPEAKER_PIN A1 // PWM-capable pin connected to PAM8302A
 
 // Volume control (percentage: 0 to 100)
-int volume = 50;
+int volume = 100;
 
 void setup() {
   Serial.begin(9600);

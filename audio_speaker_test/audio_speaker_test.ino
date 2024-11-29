@@ -19,7 +19,7 @@
 
 //   delay(2000); // Wait 2 seconds before replaying the sequence
 // }
-#define SPEAKER_PIN A0 // PWM-capable pin connected to PAM8302A A+
+#define SPEAKER_PIN A1 // PWM-capable pin connected to PAM8302A A+
 
 void setup() {
   pinMode(SPEAKER_PIN, OUTPUT); // Set speaker pin as output
@@ -32,7 +32,7 @@ void loop() {
 
 // Function to generate a tone with adjustable amplitude
 void playToneWithAmplitude(int frequency, int duration, int amplitude) {
-  const int pwmResolution = 256; // 8-bit resolution (0-255 for amplitude)
+  const int pwmResolution = 100; // 8-bit resolution (0-255 for amplitude)
   long period = 1000000L / frequency; // Period of the wave in microseconds
   long halfPeriod = period / 2;
 

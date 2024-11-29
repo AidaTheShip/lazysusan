@@ -39,7 +39,7 @@ void loop() {
   // Read motor value
   int motorVal = analogRead(motor);
   // Serial.print("Motor Value: ");
-  // Serial.println(motorVal);
+  // Serial.println(motorVal);  
 
   // // Function to trigger the sensor and get the distance
   int distance1 = getDistance(SENSOR1_TRIG, SENSOR1_EC);
