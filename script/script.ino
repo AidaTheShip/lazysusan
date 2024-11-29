@@ -1,6 +1,13 @@
 #include <Arduino.h>
 #include "pitches.h"
 
+// Define some fixed variables re: the keyboard
+const int numKeys = 3; // This is a 13-key keyboard
+const int buttons[numKeys] = {5, 3, A6}; // The keys will be connected to these pins on the Arduino
+
+// Initialize the notePlaying array to be all zeros. This array describes the status of all the notes - whether it is currently playing or not ('YES playing' or 'NOT playing').
+bool notePlaying[numKeys] = {0};  // bool has two states: [0 and 1] = [FALSE and TRUE] = [LOW and HIGH]. 0 = this note is not playing (the key is not pressed); 1 = this note is already playing (the key is pressed) 
+
 // Notes to play based on sensors
 int notes[] = {NOTE_C3, NOTE_E3, NOTE_G3, NOTE_B3};
 
@@ -22,6 +29,14 @@ int volume = 50;
 
 void setup() {
   Serial.begin(9600);
+
+  // define pinMode for all the buttons as INPUT
+  for (int i = 0; i < numKeys; i++) {
+    pinMode(buttons[i], INPUT);
+  }
+
+  // set up the built-in LED as an OUTPUT (If we don't do this, the Arduino does not know "how to talk to" the built-inLED and we wouldn't be able to use it)
+  pinMode(LED_BUILTIN, OUTPUT);
 
   // Initialize ultrasonic sensor pins
   pinMode(SENSOR1_TRIG, OUTPUT);
@@ -127,4 +142,5 @@ void playBeepingTone(int frequency, int duration, int amplitudePercentage) {
 
   // Small pause to create the beeping effect
   delay(50); // Pause between beeps
+ 
 }
