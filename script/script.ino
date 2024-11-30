@@ -1,100 +1,87 @@
 #include <Arduino.h>
 #include "pitches.h"
 
-// Button definitions
-const int numKeys = 3;
-const int buttons[numKeys] = {5, 3, A6}; // Pins for buttons
+// Ultrasonic sensor pins
+#define TRIG_PIN 13
+#define ECHO_PIN 12
 
 // Speaker pin
 #define SPEAKER_PIN A1
 
-// Notes to play
-int notes1[] = {NOTE_C3, NOTE_E3, NOTE_G3, NOTE_B3}; // Notes set 1
-int notes2[] = {NOTE_C3, NOTE_D3, NOTE_F3, NOTE_A3}; // Notes set 2
-
-// Volume control
-int volume = 100;
-
-// Sine wave table
-const int numSamples = 100; // Number of samples in a sine wave cycle
-uint8_t sineWave[numSamples];
+// Notes to play based on distance
+int notes[] = {NOTE_C3, NOTE_D3, NOTE_E3, NOTE_F3, NOTE_G3, NOTE_A3, NOTE_B3, NOTE_C4};
+const int numNotes = sizeof(notes) / sizeof(notes[0]);
 
 // State variables
-bool systemOn = true;   // Tracks whether the system is on or off
-int activeNotesSet = -1; // Tracks which set of notes to play (-1 = off)
+int currentNoteIndex = -1; // Tracks the current note being played
 
 void setup() {
   Serial.begin(9600);
 
-  // Initialize buttons as inputs
-  for (int i = 0; i < numKeys; i++) {
-    pinMode(buttons[i], INPUT);
-  }
+  // Initialize ultrasonic sensor pins
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
 
   // Initialize speaker pin
   pinMode(SPEAKER_PIN, OUTPUT);
-
-  // Generate sine wave table
-  for (int i = 0; i < numSamples; i++) {
-    sineWave[i] = 128 + 127 * sin(2 * PI * i / numSamples);
-  }
 }
 
 void loop() {
-  // Check button states
-  if (digitalRead(buttons[0]) == HIGH) { // Button 5 pressed
-    activeNotesSet = 1;
-    systemOn = true;
-  } else if (digitalRead(buttons[1]) == HIGH) { // Button 3 pressed
-    activeNotesSet = 2;
-    systemOn = true;
-  } else if (digitalRead(buttons[2]) == HIGH) { // Button A6 pressed
-    activeNotesSet = -1;
-    systemOn = false;
-    stopSound();
-  }
+  int distance = getDistance();
 
-  // Play notes based on active set
-  if (systemOn) {
-    if (activeNotesSet == 1) {
-      playNotes(notes1, sizeof(notes1) / sizeof(notes1[0]));
-    } else if (activeNotesSet == 2) {
-      playNotes(notes2, sizeof(notes2) / sizeof(notes2[0]));
+  // Map distance to note index
+  int noteIndex = mapDistanceToNoteIndex(distance);
+
+  // If the note has changed, update the PWM frequency
+  if (noteIndex != currentNoteIndex) {
+    currentNoteIndex = noteIndex;
+    if (currentNoteIndex >= 0 && currentNoteIndex < numNotes) {
+      playPWM(notes[currentNoteIndex]);
+    } else {
+      stopSound();
     }
   }
+
+  delay(50); // Small delay for stability
 }
 
-// Function to play notes continuously
-void playNotes(int notes[], int numNotes) {
-  static int currentNoteIndex = 0; // Tracks the current note
-  static unsigned long lastSwitchTime = 0; // Tracks the last time a note changed
-  const unsigned long noteDuration = 500; // Duration for each note in milliseconds
+// Function to get distance from ultrasonic sensor
+int getDistance() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(5);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
 
-  if (millis() - lastSwitchTime >= noteDuration) {
-    currentNoteIndex = (currentNoteIndex + 1) % numNotes; // Cycle through notes
-    playSineWave(notes[currentNoteIndex], volume); // Play the next note
-    lastSwitchTime = millis();
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000); // 30ms timeout
+  int distance = (duration * 0.0343) / 2; // Convert to centimeters
+  return (distance > 0) ? distance : 9999; // Return a large value if no valid reading
+}
+
+// Function to map distance to a note index
+int mapDistanceToNoteIndex(int distance) {
+  if (distance > 50) {
+    return -1; // No note if distance is too far
   }
+  return map(distance, 0, 50, 0, numNotes - 1); // Map distance to note index
 }
 
-// Function to play a sine wave at a specific frequency
-void playSineWave(int frequency, int amplitudePercentage) {
-  const int maxAmplitude = 255;
-  int amplitude = map(amplitudePercentage, 0, 100, 0, maxAmplitude);
+// Function to play a note using PWM
+void playPWM(int frequency) {
+  int period = 1000000 / frequency; // Period in microseconds
+  int halfPeriod = period / 2;     // Half period for HIGH/LOW cycle
 
-  unsigned long period = 1000000L / frequency; // Period in microseconds
-  unsigned long sampleDelay = period / numSamples;
-  int sampleIndex = 0;
-
-  // Play sine wave
-  for (int i = 0; i < numSamples; i++) {
-    analogWrite(SPEAKER_PIN, (sineWave[sampleIndex] * amplitude) / maxAmplitude);
-    delayMicroseconds(sampleDelay);
-    sampleIndex = (sampleIndex + 1) % numSamples;
+  // Start PWM
+  unsigned long startMillis = millis();
+  while (millis() - startMillis < 1000) { // Play the note for 1 second
+    digitalWrite(SPEAKER_PIN, HIGH);
+    delayMicroseconds(halfPeriod);
+    digitalWrite(SPEAKER_PIN, LOW);
+    delayMicroseconds(halfPeriod);
   }
 }
 
 // Function to stop the sound
 void stopSound() {
-  analogWrite(SPEAKER_PIN, 0); // Stop any PWM output
+  digitalWrite(SPEAKER_PIN, LOW); // Stop any output
 }
